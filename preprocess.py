@@ -8,7 +8,7 @@ import torch.nn as nn
 from SiameseLSTM import Siamese_lstm
 
 # experiment settings
-train_data_path = "data/training_data/Task_1_dev.jsonl"
+train_data_path = "data/training_data/train_test.jsonl"
 PLACE_HOLDER = '@placeholder'
 PAD = "<PAD>"
 
@@ -109,22 +109,40 @@ def train():
             X1, X2, Y = batch0
             score = model(X1, X2)
             loss = nn.MSELoss()
+
             l=loss(score, Y)
+            # print(l)
             # print(score.dtype)
             # print(Y.dtype)
             l.backward()
             optimizer.step()
+
         model.eval()
+        train_loader = train_iter(train_data_path)
         ns=0
         nc=0
+        ins = 0
         with torch.no_grad():
+            # print('eval')
+
             for instance0 in train_loader:
+                ins+=1
                 batch0 = transform(instance0)
+                article0, question0, opts0, label0 = instance0
+                # print(question0)
                 X1, X2, Y = batch0
                 score = model(X1, X2)
-                ns+=len(Y)
-                nc+=(score.max(1)[1]==Y).detach().cpu().numpy().sum()
-                print('epoch:',epoch,' ,acc:',nc/ns)
+
+                ns+=len(Y)/5
+                nc+=(score.argmax()==Y.argmax())
+                # print(score.argmax(), Y.argmax())
+
+                # print('instance num', ins)
+                # ns+=len(Y)
+                # nc+=(score.max(1)[1]==Y).detach().cpu().numpy().sum()
+            print(nc,ns)
+            acc = (nc/ns).detach().cpu().numpy().sum()
+            print('======epoch:',epoch,' ,acc:',acc)
                 # loss = nn.MSELoss(score, Y)
                 # loss.backward()
                 # optimizer.step()
