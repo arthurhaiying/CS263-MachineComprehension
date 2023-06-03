@@ -8,12 +8,12 @@ import torch.nn as nn
 from SiameseLSTM import Siamese_lstm
 
 # experiment settings
-train_data_path = "data/training_data/train_test.jsonl"
+train_data_path = "data/training_data/Task_1_dev.jsonl"
 PLACE_HOLDER = '@placeholder'
 PAD = "<PAD>"
 
 embed_size = 256
-hidden_size = 64
+hidden_size = 128
 num_layers = 2
 batch_size = 5
 epoch_num = 5
@@ -27,19 +27,19 @@ def train_iter(path):
         reader = jsonlines.Reader(f)
         for instance in reader:
             article = instance["article"]
-            question = instance["question"]
+            query = instance["question"]
             opt0, opt1, opt2, opt3, opt4 = instance["option_0"], instance["option_1"], \
                 instance["option_2"], instance["option_3"], instance["option_4"]
             opts = [opt0, opt1, opt2, opt3, opt4]
             label = instance["label"]
-            yield (article, question, opts, label)
+            yield (article, query, opts, label)
 
 
 # build vocabulary
 def yield_tokens(train_iter, tokenizer):
-    for article, question, opts, _ in train_iter:
+    for article, query, opts, _ in train_iter:
         opts = " ".join(opts)
-        text = article + " " + question + " " + opts
+        text = article + " " + query + " " + opts
         tokens = tokenizer(text)
         yield tokens
 
@@ -57,23 +57,23 @@ def sent2ids(sent):
     return vocab(tokens)
 
 
-def substitute(question, opt):
-    question = question.replace(PLACE_HOLDER, opt)
-    return question
+def substitute(query, opt):
+    query = query.replace(PLACE_HOLDER, opt)
+    return query
 
 
-# transform each instance (article, question, 5 opts, label) into five instances (X1 , X2, score)
+# transform each instance (article, query, 5 opts, label) into five instances (X1 , X2, score)
 # TODO: padding
 def transform(instance):
-    article, question, opts, label = instance
+    article, query, opts, label = instance
     scores = [0.0] * len(opts)
     scores[label] = 1.0
-    questions = [substitute(question, opt) for opt in opts]
+    queries = [substitute(query, opt) for opt in opts]
     article = sent2ids(article)
-    questions = [sent2ids(question) for question in questions]
+    queries = [sent2ids(query) for query in queries]
     articles = [article] * 5
     X1 = torch.tensor(articles, dtype=torch.int64)
-    X2 = torch.tensor(questions, dtype=torch.int64)
+    X2 = torch.tensor(queries, dtype=torch.int64)
     # Y = torch.tensor(scores, dtype=torch.float64)
     Y = torch.tensor(scores, dtype=torch.float32)
 
@@ -86,75 +86,56 @@ def train_dataloader(train_iter):
         yield transform(instance)
 
 
-def train():
+def main():
     train_loader = train_iter(train_data_path)
     model = Siamese_lstm(embed_size, hidden_size, num_layers, batch_size, vocab_size)
     optimizer= torch.optim.Adam(model.parameters())
     for epoch in range(epoch_num):
+        # training
         model.train()
         cnt=0
-        for instance0 in train_loader:
+        for instance in train_loader:
             cnt+=1
             if cnt%20==0:
                 print(cnt)
             optimizer.zero_grad()
-            article0, question0, opts0, label0 = instance0
-            Q0 = tokenizer(question0)
-            # print(f"Question: {Q0}\n")
-            vec0 = sent2ids(question0)
-            # print(f"Question tokens: {vec0}\n")
-            # print(f"vocab size: {vocab_size}")
-            # print(f"placeholder id: {PLACE_HOLDER_ID}")
-            batch0 = transform(instance0)
-            X1, X2, Y = batch0
+            batch = transform(instance)
+            X1, X2, Y = batch
             score = model(X1, X2)
             loss = nn.MSELoss()
-
             l=loss(score, Y)
             # print(l)
-            # print(score.dtype)
-            # print(Y.dtype)
             l.backward()
             optimizer.step()
 
+        # testing
         model.eval()
-        train_loader = train_iter(train_data_path)
+        test_loader = train_iter(train_data_path)
         ns=0
         nc=0
-        ins = 0
         with torch.no_grad():
-            # print('eval')
-
-            for instance0 in train_loader:
-                ins+=1
-                batch0 = transform(instance0)
-                article0, question0, opts0, label0 = instance0
-                # print(question0)
-                X1, X2, Y = batch0
+            print('eval')
+            for instance in test_loader:
+                batch = transform(instance)
+                X1, X2, Y = batch
                 score = model(X1, X2)
+                ns+=1
+                nc+=(score.argmax() == Y.argmax())
+                #print(f"instance {ns}, predict {score.argmax()}, label {Y.argmax()}")
 
-                ns+=len(Y)/5
-                nc+=(score.argmax()==Y.argmax())
-                # print(score.argmax(), Y.argmax())
-
-                # print('instance num', ins)
-                # ns+=len(Y)
-                # nc+=(score.max(1)[1]==Y).detach().cpu().numpy().sum()
-            print(nc,ns)
-            acc = (nc/ns).detach().cpu().numpy().sum()
-            print('======epoch:',epoch,' ,acc:',acc)
-                # loss = nn.MSELoss(score, Y)
-                # loss.backward()
-                # optimizer.step()
+            print(f"nc: {nc}, ns: {ns}")
+            acc = (nc/ns).detach().cpu().numpy()
+            print('======epoch:', epoch,' , acc:',acc)
+    
 
 if __name__ == '__main__':
-    train()
+    main()
     # instance0 = next(train_iter(train_data_path))
-    # article0, question0, opts0, label0 = instance0
-    # Q0 = tokenizer(question0)
-    # print(f"Question: {Q0}\n")
-    # vec0 = sent2ids(question0)
-    # print(f"Question tokens: {vec0}\n")
+    # article0, query0, opts0, label0 = instance0
+    # Q0 = tokenizer(query0)
+    # print(f"query: {Q0}\n")
+    # vec0 = sent2ids(query0)
+    # print(f"query tokens: {vec0}\n")
     # print(f"vocab size: {vocab_size}")
     # print(f"placeholder id: {PLACE_HOLDER_ID}")
     # batch0 = transform(instance0)

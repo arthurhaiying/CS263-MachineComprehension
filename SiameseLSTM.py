@@ -23,10 +23,9 @@ class LSTMEncoder(nn.Module):
 
     def forward(self, input, h0, c0):
         input = self.embedding(input)
-        input = torch.swapaxes(input, 0, 1) # swap batch axis
-        print(f"input: {input.size()} h0: {h0.size()} c0: {c0.size()}")
+        input = torch.swapaxes(input, 0, 1) # seqlen axis first
         output, _ = self.lstm(input, (h0, c0))
-        return output[-1] # output of last step
+        return output[-1] # output of last time step
 
 
 class Siamese_lstm(nn.Module):
@@ -41,16 +40,16 @@ class Siamese_lstm(nn.Module):
         )
         
 
-    def forward(self, s1, s2):
+    def forward(self, X1, X2):
 
         # init hidden, cell
         h1, c1 = self.encoder.initHiddenCell()
         h2, c2 = self.encoder.initHiddenCell()
 
         # input one by one
-        o1 = self.encoder(s1, h1, c1)
-        o2 = self.encoder(s2, h2, c2)
-        print(f"o1: {o1.size()} o2: {o2.size()}")
+        o1 = self.encoder(X1, h1, c1)
+        o2 = self.encoder(X2, h2, c2)
+        # print(f"o1: {o1.size()} o2: {o2.size()}")
 
         # utilize these two encoded vectors
         features = torch.cat((o1, o2), -1)
@@ -59,3 +58,6 @@ class Siamese_lstm(nn.Module):
         score = nn.functional.softmax(output)
         score = score[:, 0]
         return score
+    
+
+
