@@ -52,9 +52,12 @@ def seq2tensor(sequence,
     tokenizer = AutoTokenizer.from_pretrained(checkpoint)
     # Returns PyTorch tensors
     tokens = tokenizer(sequence, truncation=True,padding='max_length', max_length=max_seq_length, return_tensors="pt")
-    input_ids=tokens['input_ids']
+    # input_ids=tokens['input_ids']
     # print("Input IDs:", input_ids)
-    return input_ids
+    # return input_ids
+    # print(type(tokens))
+
+    return tokens
 
 class MyBinaryDataset(Dataset):
     def __init__(self,X,Y):
@@ -69,11 +72,11 @@ class MyBinaryDataset(Dataset):
         return self.X[index], self.Y[index]
 def build_binary_dataset(json_path, max_seq_length=512, tokenizer="bert-base-cased"):
     query_seqs, binary_labels = json_iter(json_path)
-    X_tensor = seq2tensor(query_seqs, max_seq_length=max_seq_length, checkpoint = tokenizer)
+    X_tokens = seq2tensor(query_seqs, max_seq_length=max_seq_length, checkpoint = tokenizer)
     # Y_tensor = F.one_hot(torch.tensor(binary_labels) ,num_classes = 2)
     Y_tensor = torch.tensor(binary_labels).long()
-    binary_dataset = MyBinaryDataset(X_tensor,Y_tensor)
-
+    # binary_dataset = MyBinaryDataset(X_tensor,Y_tensor)
+    binary_dataset = MyBinaryDataset(X_tokens, Y_tensor)
     return binary_dataset
 
 

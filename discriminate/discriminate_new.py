@@ -1,11 +1,9 @@
 import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
+from transformers import RobertaTokenizer, RobertaForSequenceClassification
 from torch.optim import AdamW
-from torch.utils.data import Dataset, DataLoader
-from torch.nn import BCEWithLogitsLoss
+from torch.utils.data import DataLoader
 import torch.nn as nn
-import json_process
-from json_process import build_binary_dataset
+from discriminate import batch_process
 from sklearn.metrics import accuracy_score
 import numpy as np
 def train(model, train_loader, optimizer, loss_fn, device):
@@ -16,13 +14,15 @@ def train(model, train_loader, optimizer, loss_fn, device):
     y_pred = []
 
     for inputs, labels in train_loader:
-        inputs = inputs.to(device)
-        labels = labels.to(device)
-
+        # inputs = inputs.to(device)
+        # labels = labels.to(device)
         optimizer.zero_grad()
+        input_ids = inputs["input_ids"]
+        attention_mask = inputs["attention_mask"]
 
         # Forward pass
-        outputs = model(inputs)
+        # outputs = model(inputs)
+        outputs = model(input_ids, attention_mask=attention_mask)
         # logits = outputs.logits.squeeze()
         logits = outputs.logits
         # Compute the loss
@@ -56,11 +56,12 @@ def evaluate(model, data_loader, device):
     with torch.no_grad():
         for inputs, labels in data_loader:
             # print(inputs)
-            inputs = inputs.to(device)
-            labels = labels.to(device)
+            input_ids = inputs["input_ids"]
+            attention_mask = inputs["attention_mask"]
 
             # Forward pass
-            outputs = model(inputs)
+            # outputs = model(inputs)
+            outputs = model(input_ids, attention_mask=attention_mask)
             logits = outputs.logits
             # print(logits)
             predicted_labels = torch.argmax(logits, dim=1)
@@ -125,30 +126,32 @@ def compute_class_weights(labels):
     return class_weights
 
 if __name__ == '__main__':
+    checkpoint = "roberta-base"
+    tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
+    model = RobertaForSequenceClassification.from_pretrained("roberta-base")
     # ############### loading data
-    train_json_path = ("./data/training_data/train_test.jsonl")
-    val_json_path = ("./data/training_data/train_test.jsonl")
-    test_json_path = ("./data/training_data/train_test.jsonl")
+    train_json_path = ("../data/training_data/train_test.jsonl")
+    val_json_path = ("../data/training_data/train_test.jsonl")
+    test_json_path = ("../data/training_data/train_test.jsonl")
 
-    # train_json_path = ("./data/training_data/Task_1_train.jsonl")
-    # val_json_path = ("./data/training_data/Task_1_dev.jsonl")
-    # test_json_path = ("./data/trail_data/Task_1_Imperceptibility.jsonl")
+    # train_json_path = ("../data/training_data/Task_1_train.jsonl")
+    # val_json_path = ("../data/training_data/Task_1_dev.jsonl")
+    # test_json_path = ("../data/trail_data/Task_1_Imperceptibility.jsonl")
+    #
 
 
+    train_binary_dataset = batch_process.MyDataset(train_json_path, tokenizer)
+    train_loader = DataLoader(train_binary_dataset, batch_size=5, shuffle=False)
 
-    train_binary_dataset = build_binary_dataset(train_json_path)
-    train_loader = DataLoader(train_binary_dataset, batch_size=5, shuffle=True)
-
-    val_binary_dataset = build_binary_dataset(val_json_path)
+    val_binary_dataset = batch_process.MyDataset(val_json_path, tokenizer)
     val_loader = DataLoader(val_binary_dataset, batch_size=5, shuffle=False)
 
-    test_binary_dataset = build_binary_dataset(test_json_path)
+    test_binary_dataset = batch_process.MyDataset(test_json_path, tokenizer)
     test_loader = DataLoader(test_binary_dataset, batch_size=5, shuffle=False)
 
 
     # ######################### hyper prm setting
-    checkpoint = "bert-base-cased"
-    model = AutoModelForSequenceClassification.from_pretrained(checkpoint)
+
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     batch_size = 5
     learning_rate = 1e-5
@@ -156,7 +159,7 @@ if __name__ == '__main__':
 
     optimizer = AdamW(model.parameters(), lr=learning_rate)
     # weights = torch.tensor([1.0, 4.0])
-    weights = torch.tensor(compute_class_weights(train_binary_dataset.Y)).float()
+    weights = torch.tensor(compute_class_weights(train_binary_dataset.label)).float()
     # print(weights)
     loss_fn = nn.CrossEntropyLoss(weight = weights)
 
