@@ -2,6 +2,11 @@ import jsonlines
 import torch
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 from torch.utils.data import Dataset, DataLoader
+from transformers import AdamW
+from torch.nn import BCEWithLogitsLoss
+from sklearn.metrics import accuracy_score
+import torch.nn.functional as F
+
 
 PLACE_HOLDER = '@placeholder'
 def substitute(question, opt):
@@ -65,8 +70,10 @@ class MyBinaryDataset(Dataset):
 def build_binary_dataset(json_path, max_seq_length=512, tokenizer="bert-base-cased"):
     query_seqs, binary_labels = json_iter(json_path)
     X_tensor = seq2tensor(query_seqs, max_seq_length=max_seq_length, checkpoint = tokenizer)
-    Y_tensor = torch.tensor(binary_labels, dtype=torch.float32)
+    # Y_tensor = F.one_hot(torch.tensor(binary_labels) ,num_classes = 2)
+    Y_tensor = torch.tensor(binary_labels).long()
     binary_dataset = MyBinaryDataset(X_tensor,Y_tensor)
+
     return binary_dataset
 
 
@@ -79,5 +86,6 @@ if __name__=='__main__':
     model.train()  # set model to training mode.
     for batch in binary_dataloader:
         x, y = batch
+        print(x)
         out = model(x)  # shape (batch_size, n_classes)
-        print(out.logits.shape)
+        # print(out.logits.shape)
