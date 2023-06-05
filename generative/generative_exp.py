@@ -254,63 +254,77 @@ def train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn
 
     print(f"Test Accuracy: {test_accuracy:.4f} | Test Correctness:{test_corr:.4f}")
 
-"""# main"""
-
-if __name__ == '__main__':
-    checkpoint = "roberta-base"
-    tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
-    model = RobertaForMaskedLM.from_pretrained('roberta-base')
-    train_batch_size = 50
-    learning_rate = 1e-5
-    num_epochs = 10
-    max_len=512
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-    optimizer = AdamW(model.parameters(), lr=learning_rate)
-    loss_fn = nn.CrossEntropyLoss()
-
-    
-    
 
 
-    run = wandb.init(
-          settings=wandb.Settings(start_method="fork"),
-          # Set the project where this run will be logged
-          project="roberta_generative",
-          # Track hyperparameters and run metadata
-          config={
-              "learning_rate": learning_rate,
-              "epochs": num_epochs,
-              "batch_size":train_batch_size,
-              "max_len":max_len
-
-          })
+def tune(train_batch_size=50, learning_rate=1e-5, num_epochs=10, checkpoint="roberta-base", max_len=512):
     # ############### loading data
     # train_json_path = ("./data/training_data/train_test.jsonl")
     # val_json_path = ("./data/training_data/train_test.jsonl")
     # test_json_path = ("./data/training_data/train_test.jsonl")
 
-
     train_json_path = ("../data/training_data/Task_1_train.jsonl")
     val_json_path = ("../data/training_data/Task_1_dev.jsonl")
     test_json_path = ("../data/trail_data/Task_1_Imperceptibility.jsonl")
-  
 
-
-    train_binary_dataset = ClozeDataset(train_json_path, tokenizer,max_len=max_len)
+    train_binary_dataset = ClozeDataset(train_json_path, tokenizer, max_len=max_len)
     train_loader = DataLoader(train_binary_dataset, batch_size=train_batch_size, shuffle=False)
 
-    val_binary_dataset = ClozeDataset(val_json_path, tokenizer,max_len=max_len)
+    val_binary_dataset = ClozeDataset(val_json_path, tokenizer, max_len=max_len)
     val_loader = DataLoader(val_binary_dataset, batch_size=5, shuffle=False)
 
-    test_binary_dataset = ClozeDataset(test_json_path, tokenizer,max_len=max_len)
+    test_binary_dataset = ClozeDataset(test_json_path, tokenizer, max_len=max_len)
     test_loader = DataLoader(test_binary_dataset, batch_size=5, shuffle=False)
 
-
     # ######################### hyper prm setting
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
-  
+    optimizer = AdamW(model.parameters(), lr=learning_rate)
+    loss_fn = nn.CrossEntropyLoss()
 
     train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn, device, num_epochs=num_epochs)
 
+
+"""# main"""
+
+if __name__ == '__main__':
+    wandb.login()
+    parser = argparse.ArgumentParser(description='Hyper Prm Setting')
+    parser.add_argument("-b", "--batch_size", type=int, default=50)
+    parser.add_argument("-lr", "--learning_rate", type=float, default=1e-5)
+    parser.add_argument("-e", "--num_epochs", type=int, default=10)
+    parser.add_argument("-c", "--checkpoint", type=str, default="roberta-base")
+    parser.add_argument("-l", "--max_len", type=int, default=512)
+
+    # parser.add_argument("-b", "--batchsize", type=int)
+
+    args = parser.parse_args()
+    train_batch_size, learning_rate, num_epochs, checkpoint, max_len = \
+        args.batch_size, args.learning_rate, args.num_epochs, args.checkpoint, args.max_len
+
+
+    # checkpoint = "roberta-base"
+    # tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
+    # model = RobertaForMaskedLM.from_pretrained('roberta-base')
+    # train_batch_size = 50
+    # learning_rate = 1e-5
+    # num_epochs = 10
+    # max_len=512
+
+    # ######################### hyper prm setting
+    run = wandb.init(
+        # settings=wandb.Settings(start_method="fork"),
+        settings=wandb.Settings(start_method="thread"),
+        # Set the project where this run will be logged
+        project="roberta_generative",
+        # Track hyperparameters and run metadata
+        config={
+            "learning_rate": learning_rate,
+            "epochs": num_epochs,
+            "batch_size": train_batch_size,
+            "max_len": max_len,
+            "checkpoint": checkpoint
+
+        })
+    #
+    # ####################
+    tune(train_batch_size, learning_rate, num_epochs, checkpoint, max_len)
