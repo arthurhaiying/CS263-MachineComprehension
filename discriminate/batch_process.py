@@ -74,36 +74,38 @@ class MyDataset(Dataset):
             'attention_mask': encoding['attention_mask'].squeeze()
         },label
 
-# 定义数据文件路径和RoBERTa Tokenizer
-file_path = '../data/training_data/train_test.jsonl'
-tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
-model = RobertaForSequenceClassification.from_pretrained("roberta-base")
-# 创建数据集和数据加载器
-dataset = MyDataset(file_path, tokenizer)
-print(len(dataset))
-# print()
-dataloader = DataLoader(dataset, batch_size=5, shuffle=False)
-sample_num=0
-for encoded_input,label in dataloader:
-    sample_num+=len(encoded_input)
-print(sample_num)
 
-    # input_ids = encoded_input["input_ids"]
-    # # print(input_ids)
-    # attention_mask = encoded_input["attention_mask"]
-    #
-    # # Perform sequence classification
-    # outputs = model(input_ids, attention_mask=attention_mask)
-    #
-    # # Get the predicted class probabilities
-    # probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
-    #
-    #
-    # predicted_labels = torch.argmax(probs, dim=1)
-    # # print(probs)
-    #
-    # # Print the predicted probabilities and the predicted class
-    # # predicted_class = torch.argmax(probs, dim=-1).item()
-    # print("Predicted probabilities:", probs)
-    # print("Predicted class:", predicted_labels)
-
+#
+# # 定义数据文件路径和RoBERTa Tokenizer
+# file_path = '../data/training_data/train_test.jsonl'
+# tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
+# model = RobertaForSequenceClassification.from_pretrained("roberta-base")
+# # 创建数据集和数据加载器
+# dataset = MyDataset(file_path, tokenizer)
+# print(len(dataset))
+# # print()
+# dataloader = DataLoader(dataset, batch_size=5, shuffle=False)
+# sample_num=0
+# for encoded_input,label in dataloader:
+#     sample_num+=len(encoded_input)
+# print(sample_num)
+#
+#     # input_ids = encoded_input["input_ids"]
+#     # # print(input_ids)
+#     # attention_mask = encoded_input["attention_mask"]
+#     #
+#     # # Perform sequence classification
+#     # outputs = model(input_ids, attention_mask=attention_mask)
+#     #
+#     # # Get the predicted class probabilities
+#     # probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
+#     #
+#     #
+#     # predicted_labels = torch.argmax(probs, dim=1)
+#     # # print(probs)
+#     #
+#     # # Print the predicted probabilities and the predicted class
+#     # # predicted_class = torch.argmax(probs, dim=-1).item()
+#     # print("Predicted probabilities:", probs)
+#     # print("Predicted class:", predicted_labels)
+#

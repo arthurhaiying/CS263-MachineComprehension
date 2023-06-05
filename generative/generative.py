@@ -88,6 +88,9 @@ def train(model, train_loader, optimizer, loss_fn, device,k=5):
         correct_topk += torch.sum(correct > 0).item()
         sample_num+=len(answers)
 
+        if sample_num%500==0:
+            print(str(sample_num)+"samples, Loss:" + str(loss))
+
 
         # Calculate metrics for the epoch
     # accuracy = accuracy_score(y_true, y_pred)
@@ -140,7 +143,7 @@ if __name__ == '__main__':
     train_json_path = ("../data/training_data/train_test.jsonl")
     val_json_path = ("../data/training_data/train_test.jsonl")
     test_json_path = ("../data/training_data/train_test.jsonl")
-    train_batch_size=2
+    train_batch_size=50
 
     # train_json_path = ("../data/training_data/Task_1_train.jsonl")
     # val_json_path = ("../data/training_data/Task_1_dev.jsonl")
@@ -161,7 +164,7 @@ if __name__ == '__main__':
     # ######################### hyper prm setting
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    batch_size = 5
+    # batch_size = 5
     learning_rate = 1e-5
     num_epochs = 10
 
