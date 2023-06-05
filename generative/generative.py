@@ -130,6 +130,30 @@ from sklearn.metrics import accuracy_score
 import numpy as np
 
 
+def get_data_path(task_id):
+    if task_id == 0:
+        train_val_json_path = ("../data/training_data/train_test.jsonl")
+        test_json_path = ("../data/training_data/train_test.jsonl")
+    elif task_id == 1:
+        train_val_json_path = ("../data/training_data/Task_1_train.jsonl")
+        test_json_path = ("../data/training_data/Task_1_dev.jsonl")
+
+    elif task_id == 2:
+        train_val_json_path = ("../data/training_data/Task_2_train.jsonl")
+        test_json_path = ("../data/training_data/Task_2_dev.jsonl")
+
+    elif task_id == 3:
+        train_val_json_path = ("../data/training_data/Task_1_train.jsonl")
+        test_json_path = ("../data/training_data/Task_2_dev.jsonl")
+
+    elif task_id == 4:
+        train_val_json_path = ("../data/training_data/Task_2_train.jsonl")
+        test_json_path = ("../data/training_data/Task_1_dev.jsonl")
+    else:
+        print('Wrong task id, task id should be 1, 2, 3')
+        return
+    return train_val_json_path, test_json_path
+
 def evaluate(model, train_loader, device, k=5):
     model.to(device)
     model.eval()  # set model to training mode.
@@ -274,27 +298,7 @@ def kfold_tune(k=5, train_batch_size=50, learning_rate=1e-5, num_epochs=10, chec
     tokenizer = RobertaTokenizer.from_pretrained(checkpoint)
     model = RobertaForMaskedLM.from_pretrained(checkpoint)
 
-    if task_id==0:
-        train_val_json_path = ("../data/training_data/train_test.jsonl")
-        test_json_path = ("../data/training_data/train_test.jsonl")
-    elif task_id==1:
-        train_val_json_path = ("../data/training_data/Task_1_train.jsonl")
-        test_json_path = ("../data/training_data/Task_1_dev.jsonl")
-
-    elif task_id==2:
-        train_val_json_path = ("../data/training_data/Task_2_train.jsonl")
-        test_json_path = ("../data/training_data/Task_2_dev.jsonl")
-
-    elif task_id==3:
-        train_val_json_path = ("../data/training_data/Task_1_train.jsonl")
-        test_json_path = ("../data/training_data/Task_2_dev.jsonl")
-
-    elif task_id==4:
-        train_val_json_path = ("../data/training_data/Task_2_train.jsonl")
-        test_json_path = ("../data/training_data/Task_1_dev.jsonl")
-    else:
-        print('Wrong task id, task id should be 1, 2, 3')
-        return
+    train_val_json_path, test_json_path= get_data_path(task_id)
 
     train_val_dataset = ClozeDataset(train_val_json_path, tokenizer, max_len=max_len)
 
@@ -319,6 +323,46 @@ def kfold_tune(k=5, train_batch_size=50, learning_rate=1e-5, num_epochs=10, chec
         loss_fn = nn.CrossEntropyLoss()
 
         train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn, device, num_epochs=num_epochs)
+
+
+def kfold_tune(k=5, train_batch_size=50, learning_rate=1e-5, num_epochs=10, checkpoint="roberta-base", max_len=512,
+               task_id=1):
+    # ############### loading data
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print('device:', device)
+    tokenizer = RobertaTokenizer.from_pretrained(checkpoint)
+    model = RobertaForMaskedLM.from_pretrained(checkpoint)
+
+    train_val_json_path, test_json_path = get_data_path(task_id)
+
+    train_val_dataset = ClozeDataset(train_val_json_path, tokenizer, max_len=max_len)
+
+    test_dataset = ClozeDataset(test_json_path, tokenizer, max_len=max_len)
+    test_loader = DataLoader(test_dataset, batch_size=5, shuffle=False)
+
+    # ------------k fold---------------------
+
+    validation_ratio = 0.25
+
+    dataset_size = len(train_val_dataset)
+
+    val_size = int(dataset_size * validation_ratio)
+    train_size = dataset_size - val_size
+
+    train_set = torch.utils.data.Subset(train_val_dataset, range(train_size))
+    val_set = torch.utils.data.Subset(train_val_dataset, range(train_size, dataset_size))
+
+    train_loader = DataLoader(train_set, batch_size=train_batch_size)
+    val_loader = DataLoader(val_set, batch_size=5)
+
+
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
+    optimizer = AdamW(model.parameters(), lr=learning_rate)
+    loss_fn = nn.CrossEntropyLoss()
+
+    train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn, device, num_epochs=num_epochs)
 
 
 """# main"""
@@ -346,6 +390,7 @@ if __name__ == '__main__':
         settings=wandb.Settings(start_method="thread"),
         # Set the project where this run will be logged
         project="roberta_generative_task" + str(task_id),
+        # project="test" ,
         # Track hyperparameters and run metadata
         config={
             "learning_rate": learning_rate,
@@ -358,4 +403,5 @@ if __name__ == '__main__':
         })
     #
     # ####################
-    kfold_tune(k, train_batch_size, learning_rate, num_epochs, checkpoint, max_len, task_id)
+    # kfold_tune(k, train_batch_size, learning_rate, num_epochs, checkpoint, max_len, task_id)
+    tune(train_batch_size, learning_rate, num_epochs, checkpoint, max_len, task_id)

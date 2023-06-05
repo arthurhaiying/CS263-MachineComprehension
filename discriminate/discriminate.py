@@ -90,7 +90,7 @@ class MyDataset(Dataset):
         self.max_len = max_len
 
         # 从JSONL文件中读取数据
-        with open(file_path, 'r') as file:
+        with open(file_path, 'r',encoding='utf-8') as file:
             for line in file:
                 new_label = []
                 new_query = []
@@ -187,6 +187,8 @@ def evaluate(model, data_loader, device):
     model.eval()
     y_true = []
     y_pred = []
+    opts_true =[]
+    opts_pred = []
     nc = 0
     ns = 0
 
@@ -205,8 +207,10 @@ def evaluate(model, data_loader, device):
             y_true.extend(labels.tolist())
             y_pred.extend(predicted_labels.tolist())
 
-            ns += len(labels) / 5
-            nc += (labels.argmax() == predicted_labels.argmax())
+            # ns += len(labels) / 5
+            # nc += (labels.argmax() == predicted_labels.argmax())
+            opts_true.append(labels.argmax())
+            opts_pred.append(predicted_labels.argmax())
 
             # # Collect predictions and true labels for evaluation
             # predicted_labels = torch.sigmoid(logits) > 0.5
@@ -215,10 +219,18 @@ def evaluate(model, data_loader, device):
             # y_pred.extend(predicted_labels.tolist())
 
             # Calculate metrics
+        # print('true',y_true)
+        # print('pred',y_pred)
+        # print('ot',opts_true)
+        # print(opts_pred)
+        correct_count = np.sum(np.array(opts_true)==np.array(opts_pred))
         accuracy = accuracy_score(y_true, y_pred)
         recall = recall_score(y_true, y_pred)
         f1= f1_score(y_true, y_pred)
-        correctness = nc / ns
+        correctness = correct_count /len(opts_true)
+
+        # correctness = (opts_pred==opts_true) /len(opts_true)
+        # correctness = nc / ns
 
         return accuracy, recall, f1, correctness
 
@@ -281,17 +293,7 @@ def compute_class_weights(labels):
     class_weights = total_samples / (len(class_counts) * class_counts)
     return class_weights
 
-
-def kfold_tune(k=5,train_batch_size=50, learning_rate=1e-5, num_epochs=10, checkpoint="roberta-base", max_len=20,task_id=1):
-    # ############### loading data
-    # train_json_path = ("../data/training_data/train_test.jsonl")
-    # val_json_path = ("../data/training_data/train_test.jsonl")
-    # test_json_path = ("../data/training_data/train_test.jsonl")
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    print('device:', device)
-    tokenizer = RobertaTokenizer.from_pretrained(checkpoint)
-    model = RobertaForSequenceClassification.from_pretrained(checkpoint)
-
+def get_data_path(task_id):
     if task_id == 0:
         train_val_json_path = ("../data/training_data/train_test.jsonl")
         test_json_path = ("../data/training_data/train_test.jsonl")
@@ -313,6 +315,18 @@ def kfold_tune(k=5,train_batch_size=50, learning_rate=1e-5, num_epochs=10, check
     else:
         print('Wrong task id, task id should be 1, 2, 3')
         return
+    return train_val_json_path, test_json_path
+def kfold_tune(k=5,train_batch_size=50, learning_rate=1e-5, num_epochs=10, checkpoint="roberta-base", max_len=20,task_id=1):
+    # ############### loading data
+    # train_json_path = ("../data/training_data/train_test.jsonl")
+    # val_json_path = ("../data/training_data/train_test.jsonl")
+    # test_json_path = ("../data/training_data/train_test.jsonl")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print('device:', device)
+    tokenizer = RobertaTokenizer.from_pretrained(checkpoint)
+    model = RobertaForSequenceClassification.from_pretrained(checkpoint)
+
+    train_val_json_path, test_json_path = get_data_path(task_id=task_id)
 
     train_val_dataset = MyDataset(train_val_json_path, tokenizer, max_len=max_len)
     # test_loader = DataLoader(test_binary_dataset, batch_size=5, shuffle=False)
@@ -339,6 +353,47 @@ def kfold_tune(k=5,train_batch_size=50, learning_rate=1e-5, num_epochs=10, check
         loss_fn = nn.CrossEntropyLoss(weight=weights)
 
         train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn, device, num_epochs=num_epochs)
+
+
+
+def tune(train_batch_size=50, learning_rate=1e-5, num_epochs=10, checkpoint="roberta-base", max_len=512,task_id=1):
+    # ############### loading data
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print('device:', device)
+    tokenizer = RobertaTokenizer.from_pretrained(checkpoint)
+    model = RobertaForSequenceClassification.from_pretrained(checkpoint)
+
+    train_val_json_path, test_json_path = get_data_path(task_id=task_id)
+
+    train_val_dataset = MyDataset(train_val_json_path, tokenizer, max_len=max_len)
+    # test_loader = DataLoader(test_binary_dataset, batch_size=5, shuffle=False)
+
+    test_dataset = MyDataset(test_json_path, tokenizer, max_len=max_len)
+    test_loader = DataLoader(test_dataset, batch_size=5, shuffle=False)
+    # print(len(test_binary_dataset))
+
+    validation_ratio = 0.25
+
+    dataset_size = len(train_val_dataset)
+    sentence_num = dataset_size/5
+
+    val_size = int(sentence_num*validation_ratio)*5
+    train_size = dataset_size-val_size
+
+    train_set = torch.utils.data.Subset(train_val_dataset, range(train_size))
+    val_set = torch.utils.data.Subset(train_val_dataset, range(train_size,dataset_size))
+
+
+    train_loader = DataLoader(train_set, batch_size=train_batch_size)
+    val_loader = DataLoader(val_set, batch_size=5)
+
+    optimizer = AdamW(model.parameters(), lr=learning_rate)
+
+    # weights = torch.tensor(compute_class_weights(train_val_dataset.label)).float().to(device)
+    # loss_fn = nn.CrossEntropyLoss(weight=weights)
+
+    loss_fn = nn.CrossEntropyLoss()
+    train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn, device, num_epochs=num_epochs)
 
 
 """# main"""
@@ -376,6 +431,7 @@ if __name__ == '__main__':
         settings=wandb.Settings(start_method="thread"),
         # Set the project where this run will be logged
         project="roberta_discriminate+task"+str(task_id),
+        # project="test",
         # Track hyperparameters and run metadata
         config={
             "learning_rate": learning_rate,
@@ -388,4 +444,5 @@ if __name__ == '__main__':
         })
 
     # ####################
-    kfold_tune(k,train_batch_size, learning_rate, num_epochs, checkpoint, max_len,task_id)
+    # kfold_tune(k,train_batch_size, learning_rate, num_epochs, checkpoint, max_len,task_id)
+    tune( train_batch_size, learning_rate, num_epochs, checkpoint, max_len, task_id)
