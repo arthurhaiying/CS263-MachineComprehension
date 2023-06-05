@@ -325,7 +325,7 @@ def kfold_tune(k=5, train_batch_size=50, learning_rate=1e-5, num_epochs=10, chec
         train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn, device, num_epochs=num_epochs)
 
 
-def kfold_tune(k=5, train_batch_size=50, learning_rate=1e-5, num_epochs=10, checkpoint="roberta-base", max_len=512,
+def tune( train_batch_size=50, learning_rate=1e-5, num_epochs=10, checkpoint="roberta-base", max_len=512,
                task_id=1):
     # ############### loading data
 
