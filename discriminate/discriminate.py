@@ -177,9 +177,9 @@ def train(model, train_loader, optimizer, loss_fn, device):
 
     accuracy = accuracy_score(y_true, y_pred)
     recall = recall_score(y_true, y_pred)
-    f1_score = f1_score(y_true, y_pred)
+    f1 = f1_score(y_true, y_pred)
     avg_loss = total_loss / len(train_loader)
-    return accuracy, recall, f1_score, avg_loss
+    return accuracy, recall, f1, avg_loss
 
 
 def evaluate(model, data_loader, device):
@@ -217,10 +217,10 @@ def evaluate(model, data_loader, device):
             # Calculate metrics
         accuracy = accuracy_score(y_true, y_pred)
         recall = recall_score(y_true, y_pred)
-        f1_score = f1_score(y_true, y_pred)
+        f1= f1_score(y_true, y_pred)
         correctness = nc / ns
 
-        return accuracy, recall, f1_score, correctness
+        return accuracy, recall, f1, correctness
 
 
 def train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn, device, num_epochs=10):
