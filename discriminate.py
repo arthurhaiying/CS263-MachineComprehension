@@ -15,7 +15,7 @@ def train(model, train_loader, optimizer, loss_fn, device):
     y_true = []
     y_pred = []
 
-    for inputs, labels in train_loader:
+    for inputs, opts, answer in train_loader:
         inputs = inputs.to(device)
         labels = labels.to(device)
 

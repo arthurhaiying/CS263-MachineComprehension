@@ -129,6 +129,7 @@ if __name__ == '__main__':
     checkpoint = "roberta-base"
     tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
     model = RobertaForSequenceClassification.from_pretrained("roberta-base")
+    max_len=512
     # ############### loading data
     train_json_path = ("../data/training_data/train_test.jsonl")
     val_json_path = ("../data/training_data/train_test.jsonl")
@@ -140,13 +141,13 @@ if __name__ == '__main__':
     #
 
 
-    train_binary_dataset = batch_process.MyDataset(train_json_path, tokenizer)
+    train_binary_dataset = batch_process.MyDataset(train_json_path, tokenizer,max_len=max_len)
     train_loader = DataLoader(train_binary_dataset, batch_size=5, shuffle=False)
 
-    val_binary_dataset = batch_process.MyDataset(val_json_path, tokenizer)
+    val_binary_dataset = batch_process.MyDataset(val_json_path, tokenizer,max_len=max_len)
     val_loader = DataLoader(val_binary_dataset, batch_size=5, shuffle=False)
 
-    test_binary_dataset = batch_process.MyDataset(test_json_path, tokenizer)
+    test_binary_dataset = batch_process.MyDataset(test_json_path, tokenizer,max_len=max_len)
     test_loader = DataLoader(test_binary_dataset, batch_size=5, shuffle=False)
 
 

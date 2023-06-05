@@ -34,10 +34,11 @@ def transform_binary(instance,new_label, new_query):
         new_label.append(label_i)
         new_query.append(seq_i)
 class MyDataset(Dataset):
-    def __init__(self, file_path, tokenizer):
+    def __init__(self, file_path, tokenizer, max_len=512):
         self.data = []
         self.label =[]
         self.tokenizer = tokenizer
+        self.max_len = max_len
 
         # 从JSONL文件中读取数据
         with open(file_path, 'r') as file:
@@ -63,7 +64,7 @@ class MyDataset(Dataset):
         encoding = self.tokenizer.encode_plus(
             text,
             add_special_tokens=True,
-            max_length=30,  # 根据需求设置最大长度
+            max_length=self.max_len,  # 根据需求设置最大长度
             padding='max_length',
             truncation=True,
             return_tensors='pt'
@@ -82,25 +83,27 @@ dataset = MyDataset(file_path, tokenizer)
 print(len(dataset))
 # print()
 dataloader = DataLoader(dataset, batch_size=5, shuffle=False)
+sample_num=0
 for encoded_input,label in dataloader:
-    # print(inputs)
-    # print(encoded_input, label)
-    input_ids = encoded_input["input_ids"]
-    # print(input_ids)
-    attention_mask = encoded_input["attention_mask"]
+    sample_num+=len(encoded_input)
+print(sample_num)
 
-    # Perform sequence classification
-    outputs = model(input_ids, attention_mask=attention_mask)
-
-    # Get the predicted class probabilities
-    probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
-
-
-    predicted_labels = torch.argmax(probs, dim=1)
-    # print(probs)
-
-    # Print the predicted probabilities and the predicted class
-    # predicted_class = torch.argmax(probs, dim=-1).item()
-    print("Predicted probabilities:", probs)
-    print("Predicted class:", predicted_labels)
+    # input_ids = encoded_input["input_ids"]
+    # # print(input_ids)
+    # attention_mask = encoded_input["attention_mask"]
+    #
+    # # Perform sequence classification
+    # outputs = model(input_ids, attention_mask=attention_mask)
+    #
+    # # Get the predicted class probabilities
+    # probs = torch.nn.functional.softmax(outputs.logits, dim=-1)
+    #
+    #
+    # predicted_labels = torch.argmax(probs, dim=1)
+    # # print(probs)
+    #
+    # # Print the predicted probabilities and the predicted class
+    # # predicted_class = torch.argmax(probs, dim=-1).item()
+    # print("Predicted probabilities:", probs)
+    # print("Predicted class:", predicted_labels)
 
