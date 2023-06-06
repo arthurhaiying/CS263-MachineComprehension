@@ -1,0 +1,5 @@
+Name,approach,task-id,Runtime,batch_size,checkpoint,epochs,learning_rate,max_len,Train Acc,Train F1,Train Loss,Train Recall,test F1,test F1 2,test Recall,test Recall 2,test correctenss,test correctenss 2,val Acc,val F1,val Recall,val correctenss,test Acc,test Acc 2
+helpful-grass-9,generative,2,984,50,roberta-base,10,0.00001,512,0.988690884,NA,0.489688808,NA,NA,NA,NA,NA,NA,NA,0.6307,NA,NA,NA,0.6739,0.4145
+still-pyramid-8,generative,1,925,50,roberta-base,10,0.00001,512,0.982067511,NA,0.531561241,NA,NA,NA,NA,NA,NA,NA,0.619164619,NA,NA,NA,0.6138,0.4868
+clear-energy-5,discriminate,2,3482,50,roberta-base,10,0.00001,512,0.930020562,0.826508071,0.162939811,0.833447567,0.603439291,0.505458957,0.694244604,0.768757688,0.541966438,0.426814258,0.838369305,0.6139748,0.642685851,0.575539589,0.817505995,0.699138991
+misty-eon-4,discriminate,1,3308,50,roberta-base,10,0.00001,512,0.928340366,0.819422293,0.169381106,0.812939522,0.568807339,0.549092601,0.724477245,0.707434053,0.495694935,0.474820167,0.797542998,0.595284872,0.744471744,0.547911525,0.780319803,0.767625899
