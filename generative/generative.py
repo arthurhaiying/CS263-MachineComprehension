@@ -129,6 +129,33 @@ import torch.nn as nn
 from sklearn.metrics import accuracy_score
 import numpy as np
 
+def get_newdata_path(task_id):
+    if task_id == 0:
+        train_json_path = ("../data/training_data/train_test.jsonl")
+        val_json_path = ("../data/training_data/train_test.jsonl")
+        test_json_path = ("../data/training_data/train_test.jsonl")
+    elif task_id == 1:
+        train_json_path = ('../newdata/train/Task_1_train.jsonl')
+        test_json_path = ('../newdata/val/Task_1_test.jsonl')
+        val_json_path = ('../newdata/test/Task_1_val.jsonl')
+
+    elif task_id == 2:
+        train_json_path = ('../newdata/train/Task_2_train.jsonl')
+        test_json_path = ('../newdata/val/Task_2_test.jsonl')
+        val_json_path = ('../newdata/test/Task_2_val.jsonl')
+
+    elif task_id == 3:
+        train_json_path = ('../newdata/train/Task_1_train.jsonl')
+        test_json_path = ('../newdata/val/Task_1_test.jsonl')
+        val_json_path = ('../newdata/test/Task_1_val.jsonl')
+
+    elif task_id == 4:
+        train_val_json_path = ("../data/training_data/Task_2_train.jsonl")
+        test_json_path = ("../data/training_data/Task_1_dev.jsonl")
+    else:
+        print('Wrong task id, task id should be 1, 2, 3')
+        return
+    return train_val_json_path, test_json_path
 
 def get_data_path(task_id):
     if task_id == 0:
