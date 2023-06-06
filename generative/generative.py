@@ -219,7 +219,7 @@ def evaluate(model, train_loader, device, k=5):
         # Calculate metrics for the epoch
     # accuracy = accuracy_score(y_true, y_pred)
     topk_acc = correct_topk / sample_num
-    correctness = correct_num / len(train_loader)
+    correctness = correct_num / len(sample_num)
     return topk_acc, correctness
 
 
