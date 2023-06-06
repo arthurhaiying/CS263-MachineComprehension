@@ -136,6 +136,7 @@ import numpy as np
 
 def correct_num(logits, mask_indices, opts, answers):
     pred_masked_probs = logits[torch.arange(logits.size(0)), mask_indices]
+    opts = opts.to(pred_masked_probs.device)
     # the probs of the whole vocab at the masked position
     opts_probs = pred_masked_probs.gather(dim=1, index=opts)
     pred_answers_index = torch.argmax(opts_probs, dim=1)
