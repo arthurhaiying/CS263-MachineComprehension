@@ -111,12 +111,15 @@ class ClozeDataset(Dataset):
         # print(opts)
         # print('opts',opts_token_id)
         # # print(answer)
-        # print('answer', answer_token_id)
+        # print('answer', answer_token_id.type)
+        # print('opttoken',opts_token_id.type)
+        # print(opts_token_id)
+        opts_tensor = torch.tensor(opts_token_id)
 
         return {
             'input_ids': text_encoding['input_ids'].squeeze(),
             'attention_mask': text_encoding['attention_mask'].squeeze()
-        }, opts_token_id, answer_token_id, mask_index
+        }, opts_tensor, answer_token_id, mask_index
 
 
 """# training"""
@@ -129,6 +132,16 @@ import torch.nn as nn
 from sklearn.metrics import accuracy_score
 import numpy as np
 
+
+
+def correct_num(logits, mask_indices, opts, answers):
+    pred_masked_probs = logits[torch.arange(logits.size(0)), mask_indices]
+    # the probs of the whole vocab at the masked position
+    opts_probs = pred_masked_probs.gather(dim=1, index=opts)
+    pred_answers_index = torch.argmax(opts_probs, dim=1)
+    pred_answers = opts.gather(dim=1, index=pred_answers_index.unsqueeze(1)).squeeze(dim=1)
+    correct_samples = torch.eq(answers, pred_answers).sum().item()
+    return correct_samples
 def get_newdata_path(task_id):
     if task_id == 0:
         train_json_path = ("../data/training_data/train_test.jsonl")
@@ -191,7 +204,7 @@ def evaluate(model, train_loader, device, k=5):
     y_pred = []
     sample_num = 0
     correct_topk = 0
-    correct_num = 0
+    correct = 0
 
     for inputs, opts, answers, mask_indices in train_loader:
         input_ids = inputs["input_ids"].to(device)
@@ -204,55 +217,41 @@ def evaluate(model, train_loader, device, k=5):
         logits = outputs.logits
         batch_logits = logits[torch.arange(len(logits)), mask_indices]
 
-        _, top_k_indices = torch.topk(batch_logits, k, dim=1)  # 获取预测结果中的 Top-k 索引
-        _, top_1_indices = torch.topk(batch_logits, 1, dim=1)  # 获取预测结果中的 Top-k 索引
-        # print(top_k_indices)
-        correct = torch.sum(top_1_indices == answers.view(-1, 1), dim=1)
-        correct_num += torch.sum(correct > 0).item()
-        correct_k = torch.sum(top_k_indices == answers.view(-1, 1), dim=1)  # 比较 Top-k 索引与真实标签
-        correct_topk += torch.sum(correct_k > 0).item()
+        correct += correct_num(logits, mask_indices, opts, answers)
         sample_num += len(answers)
 
-        # correct = torch.sum(top_k_indices == answers.view(-1, 1), dim=1)  # 比较 Top-k 索引与真实标签
-        # correct_topk += torch.sum(correct > 0).item()
+    acc = correct / sample_num
 
-        # Calculate metrics for the epoch
-    # accuracy = accuracy_score(y_true, y_pred)
-    topk_acc = correct_topk / sample_num
-    correctness = correct_num / len(sample_num)
-    return topk_acc, correctness
-
+    return acc
 
 def train(model, train_loader, optimizer, loss_fn, device, k=5):
     model.to(device)
     model.train()  # set model to training mode.
 
     total_loss = 0
-    y_true = []
-    y_pred = []
     sample_num = 0
     correct_topk = 0
+    correct = 0
 
     for inputs, opts, answers, mask_indices in train_loader:
-        # inputs = inputs.to(device)
-        # labels = labels.to(device)
+
+
         optimizer.zero_grad()
         input_ids = inputs["input_ids"].to(device)
+
         attention_mask = inputs["attention_mask"].to(device)
         answers = answers.to(device)
         mask_indices = mask_indices.to(device)
+        opts = opts.to(device)
 
         # Forward pass
-        # outputs = model(inputs)
         outputs = model(input_ids, attention_mask=attention_mask)
-        # logits = outputs.logits.squeeze()
         logits = outputs.logits
-        # print(logits)
-        # print(logits.shape)
+        correct +=correct_num(logits, mask_indices, opts, answers)
+
+
         batch_logits = logits[torch.arange(len(logits)), mask_indices]
         # Compute the loss
-        # print(batch_logits.shape)
-
         loss = loss_fn(batch_logits, answers)
         total_loss += loss.item()
 
@@ -262,45 +261,41 @@ def train(model, train_loader, optimizer, loss_fn, device, k=5):
         # print(answers)
 
         _, top_k_indices = torch.topk(batch_logits, k, dim=1)  # 获取预测结果中的 Top-k 索引
-        correct = torch.sum(top_k_indices == answers.view(-1, 1), dim=1)  # 比较 Top-k 索引与真实标签
-        # print(correct)
 
-        correct_topk += torch.sum(correct > 0).item()
         sample_num += len(answers)
 
         if sample_num % 500 == 0:
             print(str(sample_num) + "samples, Loss:" + str(loss))
 
         # Calculate metrics for the epoch
-    # accuracy = accuracy_score(y_true, y_pred)
-    # print('samplenum',sample_num)
-    # print('len',len(train_loader))
-    topk_acc = correct_topk / sample_num
+    # topk_acc = correct_topk / sample_num
     avg_loss = total_loss / len(train_loader)
-    return topk_acc, avg_loss
-
+    acc = correct / sample_num
+    # return topk_acc, avg_loss, correctness
+    return acc, avg_loss
 
 def train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn, device, num_epochs=10):
     # best_val_accuracy = 0.0
-    best_val_corr = 0.0
+    best_val_acc=0.0
     for epoch in range(num_epochs):
         print(f"Epoch {epoch + 1}/{num_epochs}")
         print("-" * 10)
         # Training
-        train_accuracy, train_loss = train(model, train_loader, optimizer, loss_fn, device)
-        print(f"Train Loss: {train_loss:.4f} | Train Accuracy: {train_accuracy:.4f}")
-        wandb.log({"Train Loss": train_loss, "Train Acc": train_accuracy})
+        train_acc,train_loss = train(model, train_loader, optimizer, loss_fn, device)
+        print(
+            f"Train Loss: {train_loss:.4f} | Train Acc: {train_acc:.4f}")
+        wandb.log({"Train Loss": train_loss, "Train Acc": train_acc})
 
         # Validation
-        val_accuracy, val_corr = evaluate(model, val_loader, device)
-        print(f"Validation Accuracy: {val_accuracy:.4f} | Val Correctness:{val_corr:.4f} ")
-        wandb.log({"Val Acc": val_accuracy, "Val Correctness": val_corr})
+        val_acc = evaluate(model, val_loader, device)
+        print(f"Validation Accuracy: {val_acc:.4f} ")
+        wandb.log({"Val Acc": val_acc})
 
         # Check if the current model has the best validation accuracy
         # if val_accuracy > best_val_accuracy:
         #     best_val_accuracy = val_accuracy
-        if val_corr > best_val_corr:
-            best_val_corr = val_corr
+        if val_acc > best_val_acc:
+            best_val_acc = val_acc
             torch.save(model.state_dict(), "best_generative_model.pt")
             print("Best model saved!")
 
@@ -310,11 +305,11 @@ def train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn
 
     # Load the best model and evaluate on the test set
     model.load_state_dict(torch.load("best_generative_model.pt"))
-    test_accuracy, test_corr = evaluate(model, test_loader, device)
-    wandb.log({"Test Acc": test_accuracy, "Test Correctness": test_corr})
+    test_acc= evaluate(model, test_loader, device)
+    wandb.log({"Test Acc": test_acc})
     # print(f"Test Accuracy: {test_accuracy:.4f}")
 
-    print(f"Test Accuracy: {test_accuracy:.4f} | Test Correctness:{test_corr:.4f}")
+    print(f"Test Accuracy: {test_acc:.4f}")
 
 
 def kfold_tune(k=5, train_batch_size=50, learning_rate=1e-5, num_epochs=10, checkpoint="roberta-base", max_len=512,
@@ -404,8 +399,8 @@ if __name__ == '__main__':
         # settings=wandb.Settings(start_method="fork"),
         settings=wandb.Settings(start_method="thread"),
         # Set the project where this run will be logged
-        project="roberta_generative_task" + str(task_id),
-        # project="test" ,
+        # project="roberta_generative_task" + str(task_id),
+        project="test" ,
         # Track hyperparameters and run metadata
         config={
             "learning_rate": learning_rate,
