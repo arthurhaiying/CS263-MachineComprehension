@@ -147,29 +147,22 @@ def get_newdata_path(task_id):
         train_json_path = ("../data/training_data/train_test.jsonl")
         val_json_path = ("../data/training_data/train_test.jsonl")
         test_json_path = ("../data/training_data/train_test.jsonl")
+        test_another_json_path = ("../data/training_data/train_test.jsonl")
     elif task_id == 1:
         train_json_path = ('../newdata/train/Task_1_train.jsonl')
         val_json_path = ('../newdata/val/Task_1_val.jsonl')
         test_json_path = ('../newdata/test/Task_1_test.jsonl')
+        test_another_json_path = ('../newdata/test/Task_2_test.jsonl')
 
     elif task_id == 2:
         train_json_path = ('../newdata/train/Task_2_train.jsonl')
         val_json_path = ('../newdata/val/Task_2_val.jsonl')
         test_json_path = ('../newdata/test/Task_2_test.jsonl')
-
-    elif task_id == 3:
-        train_json_path = ('../newdata/train/Task_1_train.jsonl')
-        val_json_path = ('../newdata/val/Task_2_val.jsonl')
-        test_json_path = ('../newdata/test/Task_1_test.jsonl')
-
-    elif task_id == 4:
-        train_json_path = ('../newdata/train/Task_2_train.jsonl')
-        val_json_path = ('../newdata/val/Task_1_val.jsonl')
-        test_json_path = ('../newdata/test/Task_2_test.jsonl')
+        test_another_json_path = ('../newdata/test/Task_1_test.jsonl')
     else:
-        print('Wrong task id, task id should be 1, 2, 3, 4')
+        print('Wrong task id, task id should be 1, 2')
         return
-    return train_json_path,val_json_path, test_json_path
+    return train_json_path,val_json_path, test_json_path, test_another_json_path
 
 def get_data_path(task_id):
     if task_id == 0:
@@ -274,7 +267,7 @@ def train(model, train_loader, optimizer, loss_fn, device, k=5):
     # return topk_acc, avg_loss, correctness
     return acc, avg_loss
 
-def train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn, device, num_epochs=10):
+def train_model(model, train_loader, val_loader, test_loader, another_test_loader, optimizer, loss_fn, device, num_epochs=10):
     # best_val_accuracy = 0.0
     best_val_acc=0.0
     for epoch in range(num_epochs):
@@ -307,9 +300,13 @@ def train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn
     model.load_state_dict(torch.load("best_generative_model.pt"))
     test_acc= evaluate(model, test_loader, device)
     wandb.log({"Test Acc": test_acc})
+    print(f"Test Accuracy: {test_acc:.4f}")
     # print(f"Test Accuracy: {test_accuracy:.4f}")
 
-    print(f"Test Accuracy: {test_acc:.4f}")
+    # model.load_state_dict(torch.load("best_generative_model.pt"))
+    test_acc_2 = evaluate(model, another_test_loader, device)
+    wandb.log({"Test Acc 2": test_acc_2})
+    print(f"Test Accuracy 2: {test_acc_2:.4f}")
 
 
 def kfold_tune(k=5, train_batch_size=50, learning_rate=1e-5, num_epochs=10, checkpoint="roberta-base", max_len=512,
@@ -357,22 +354,24 @@ def tune( train_batch_size=50, learning_rate=1e-5, num_epochs=10, checkpoint="ro
     tokenizer = RobertaTokenizer.from_pretrained(checkpoint)
     model = RobertaForMaskedLM.from_pretrained(checkpoint)
 
-    train_json_path, val_json_path, test_json_path = get_newdata_path(task_id)
+    train_json_path, val_json_path, test_json_path , test_another_json_path = get_newdata_path(task_id)
 
     train_set = ClozeDataset(train_json_path, tokenizer, max_len=max_len)
     val_set = ClozeDataset(val_json_path, tokenizer, max_len=max_len)
     test_set = ClozeDataset(test_json_path, tokenizer, max_len=max_len)
+    another_test_set = ClozeDataset(test_another_json_path, tokenizer, max_len=max_len)
 
     train_loader = DataLoader(train_set, batch_size=train_batch_size, shuffle=False)
     val_loader = DataLoader(val_set, batch_size=5, shuffle=False)
     test_loader = DataLoader(test_set, batch_size=5, shuffle=False)
+    another_test_loader = DataLoader(another_test_set, batch_size=5, shuffle=False)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     optimizer = AdamW(model.parameters(), lr=learning_rate)
     loss_fn = nn.CrossEntropyLoss()
 
-    train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn, device, num_epochs=num_epochs)
+    train_model(model, train_loader, val_loader, test_loader, another_test_loader, optimizer, loss_fn, device, num_epochs=num_epochs)
 
 
 """# main"""
