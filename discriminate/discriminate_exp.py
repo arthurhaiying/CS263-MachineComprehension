@@ -9,13 +9,9 @@ Original file is located at
 # environment config
 """
 
-
 import torch
 import wandb
-print(torch.cuda.is_available())
-device_id = 0 if torch.cuda.is_available() else 'cpu' # Equivalent to device_id = 'cuda:0'
-device = torch.device(device_id) # use these semantics to specify a specific device.
-wandb.login()
+import argparse
 
 """# dataset """
 
@@ -24,23 +20,28 @@ from transformers import RobertaTokenizer, RobertaForSequenceClassification
 from torch.utils.data import Dataset, DataLoader
 
 import json
+
 PLACE_HOLDER = '@placeholder'
+
+
 def substitute(question, opt):
     question = question.replace(PLACE_HOLDER, opt)
     return question
+
+
 def json_query_complete(json_instance):
+    article = json_instance["article"]
+    question = json_instance["question"]
+    opt0, opt1, opt2, opt3, opt4 = json_instance["option_0"], json_instance["option_1"], \
+        json_instance["option_2"], json_instance["option_3"], json_instance["option_4"]
+    opts = [opt0, opt1, opt2, opt3, opt4]
+    label = json_instance["label"]
+    instance_tuple = (article, question, opts, label)
 
-        article = json_instance["article"]
-        question = json_instance["question"]
-        opt0, opt1, opt2, opt3, opt4 = json_instance["option_0"], json_instance["option_1"], \
-                json_instance["option_2"], json_instance["option_3"], json_instance["option_4"]
-        opts = [opt0, opt1, opt2, opt3, opt4]
-        label = json_instance["label"]
-        instance_tuple = (article, question, opts, label)
+    return instance_tuple
 
-        return instance_tuple
 
-def transform_binary(instance,new_label, new_query):
+def transform_binary(instance, new_label, new_query):
     article, question, opts, label = instance
 
     # scores = [0.0] * len(opts)
@@ -49,15 +50,17 @@ def transform_binary(instance,new_label, new_query):
 
     for i in range(len(questions)):
         Q_i = questions[i]
-        seq_i =Q_i+'</s></s>'+article
+        seq_i = Q_i + '</s></s>' + article
         # seq_i = Q_i + '[SEP]' + article
-        label_i = 1 if label==i else 0
+        label_i = 1 if label == i else 0
         new_label.append(label_i)
         new_query.append(seq_i)
+
+
 class MyDataset(Dataset):
     def __init__(self, file_path, tokenizer, max_len=512):
         self.data = []
-        self.label =[]
+        self.label = []
         self.tokenizer = tokenizer
         self.max_len = max_len
 
@@ -65,7 +68,7 @@ class MyDataset(Dataset):
         with open(file_path, 'r') as file:
             for line in file:
                 new_label = []
-                new_query =[]
+                new_query = []
                 json_obj = json.loads(line)
                 json_instance = json_query_complete(json_obj)
                 transform_binary(json_instance, new_label, new_query)
@@ -93,7 +96,8 @@ class MyDataset(Dataset):
         return {
             'input_ids': encoding['input_ids'].squeeze(),
             'attention_mask': encoding['attention_mask'].squeeze()
-        },label
+        }, label
+
 
 """# training"""
 
@@ -105,6 +109,8 @@ import torch.nn as nn
 
 from sklearn.metrics import accuracy_score
 import numpy as np
+
+
 def train(model, train_loader, optimizer, loss_fn, device):
     model.to(device)
     model.train()  # set model to training mode.
@@ -139,33 +145,32 @@ def train(model, train_loader, optimizer, loss_fn, device):
         y_true.extend(labels.tolist())
         y_pred.extend(predicted_labels.tolist())
 
-        if len(y_true)%500==0:
-          print(str(len(y_true))+"samples, Loss:" + str(loss))
-
+        if len(y_true) % 500 == 0:
+            print(str(len(y_true)) + "samples, Loss:" + str(loss))
 
         # Calculate metrics for the epoch
     accuracy = accuracy_score(y_true, y_pred)
     avg_loss = total_loss / len(train_loader)
     return accuracy, avg_loss
 
+
 def evaluate(model, data_loader, device):
     model.to(device)
     model.eval()
     y_true = []
     y_pred = []
-    nc=0
-    ns=0
+    nc = 0
+    ns = 0
 
     with torch.no_grad():
         for inputs, labels in data_loader:
-
             labels = labels.to(device)
             input_ids = inputs["input_ids"].to(device)
             attention_mask = inputs["attention_mask"].to(device)
 
             # Forward pass
             outputs = model(input_ids, attention_mask=attention_mask)
-            
+
             logits = outputs.logits
             predicted_labels = torch.argmax(logits, dim=1)
             y_true.extend(labels.tolist())
@@ -173,7 +178,6 @@ def evaluate(model, data_loader, device):
 
             ns += len(labels) / 5
             nc += (labels.argmax() == predicted_labels.argmax())
-
 
             # # Collect predictions and true labels for evaluation
             # predicted_labels = torch.sigmoid(logits) > 0.5
@@ -183,16 +187,17 @@ def evaluate(model, data_loader, device):
 
             # Calculate metrics
         accuracy = accuracy_score(y_true, y_pred)
-        correctness = nc/ns
+        correctness = nc / ns
 
         return accuracy, correctness
+
 
 def train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn, device, num_epochs=10):
     # best_val_accuracy = 0.0
 
-    best_val_corr=0.0
+    best_val_corr = 0.0
     for epoch in range(num_epochs):
-        print(f"Epoch {epoch+1}/{num_epochs}")
+        print(f"Epoch {epoch + 1}/{num_epochs}")
         print("-" * 10)
 
         # Training
@@ -212,7 +217,6 @@ def train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn
             best_val_corr = val_corr
             torch.save(model.state_dict(), "best_model.pt")
             print("Best model saved!")
-        
 
         print()
 
@@ -226,69 +230,88 @@ def train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn
     print(f"Test Accuracy: {test_accuracy:.4f} | Test Correctness:{test_corr:.4f}")
     wandb.log({"Test Acc": test_accuracy, "Test Correctness": test_corr})
 
+
 def compute_class_weights(labels):
     class_counts = np.bincount(labels)
     total_samples = len(labels)
     class_weights = total_samples / (len(class_counts) * class_counts)
     return class_weights
 
-"""# main"""
 
-if __name__ == '__main__':
-
-
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-    train_batch_size = 50
-    learning_rate = 1e-5
-    num_epochs = 10
-    checkpoint = "roberta-base"
-    tokenizer = RobertaTokenizer.from_pretrained('roberta-base')
-    model = RobertaForSequenceClassification.from_pretrained("roberta-base")
-    max_len=512
-    # ######################### hyper prm setting
-    run = wandb.init(
-          settings=wandb.Settings(start_method="fork"),
-          # Set the project where this run will be logged
-          project="roberta_discriminate",
-          # Track hyperparameters and run metadata
-          config={
-              "learning_rate": learning_rate,
-              "epochs": num_epochs,
-              "batch_size":train_batch_size,
-              "max_len":max_len
-
-          })
-
-  ####################
-    
+def tune(train_batch_size=50, learning_rate=1e-5, num_epochs=10, checkpoint="roberta-base", max_len=512):
     # ############### loading data
-    # train_json_path = ("./data/training_data/train_test.jsonl")
-    # val_json_path = ("./data/training_data/train_test.jsonl")
-    # test_json_path = ("./data/training_data/train_test.jsonl")
+    # train_json_path = ("../data/training_data/train_test.jsonl")
+    # val_json_path = ("../data/training_data/train_test.jsonl")
+    # test_json_path = ("../data/training_data/train_test.jsonl")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    print('device:', device)
+    tokenizer = RobertaTokenizer.from_pretrained(checkpoint)
+    model = RobertaForSequenceClassification.from_pretrained(checkpoint)
 
     train_json_path = ("../data/training_data/Task_1_train.jsonl")
     val_json_path = ("../data/training_data/Task_1_dev.jsonl")
     test_json_path = ("../data/trail_data/Task_1_Imperceptibility.jsonl")
-    
 
-
-    train_binary_dataset = MyDataset(train_json_path, tokenizer,max_len=max_len)
+    train_binary_dataset = MyDataset(train_json_path, tokenizer, max_len=max_len)
     train_loader = DataLoader(train_binary_dataset, batch_size=train_batch_size, shuffle=True)
 
-    val_binary_dataset = MyDataset(val_json_path, tokenizer,max_len=max_len)
+    val_binary_dataset = MyDataset(val_json_path, tokenizer, max_len=max_len)
     val_loader = DataLoader(val_binary_dataset, batch_size=5, shuffle=False)
 
-    test_binary_dataset = MyDataset(test_json_path, tokenizer,max_len=max_len)
+    test_binary_dataset = MyDataset(test_json_path, tokenizer, max_len=max_len)
     test_loader = DataLoader(test_binary_dataset, batch_size=5, shuffle=False)
-
-
-
 
     optimizer = AdamW(model.parameters(), lr=learning_rate)
     # weights = torch.tensor([1.0, 4.0])
     weights = torch.tensor(compute_class_weights(train_binary_dataset.label)).float().to(device)
     # print(weights)
-    loss_fn = nn.CrossEntropyLoss(weight = weights)
+    loss_fn = nn.CrossEntropyLoss(weight=weights)
 
     train_model(model, train_loader, val_loader, test_loader, optimizer, loss_fn, device, num_epochs=num_epochs)
 
+
+"""# main"""
+
+if __name__ == '__main__':
+    # print(torch.cuda.is_available())
+    # device_id = 0 if torch.cuda.is_available() else 'cpu'  # Equivalent to device_id = 'cuda:0'
+    # device = torch.device(device_id)  # use these semantics to specify a specific device.
+
+    wandb.login()
+    parser = argparse.ArgumentParser(description='Hyper Prm Setting')
+    parser.add_argument("-b", "--batch_size", type=int, default=50)
+    parser.add_argument("-lr", "--learning_rate", type=float, default=1e-5)
+    parser.add_argument("-e", "--num_epochs", type=int, default=10)
+    parser.add_argument("-c", "--checkpoint", type=str, default="roberta-base")
+    parser.add_argument("-l", "--max_len", type=int, default=512)
+
+    # parser.add_argument("-b", "--batchsize", type=int)
+
+    args = parser.parse_args()
+    train_batch_size, learning_rate, num_epochs, checkpoint, max_len = \
+        args.batch_size, args.learning_rate, args.num_epochs, args.checkpoint, args.max_len
+
+    # train_batch_size = 50
+    # learning_rate = 1e-5
+    # num_epochs = 10
+    # checkpoint = "roberta-base"
+    # max_len = 512
+
+    # ######################### hyper prm setting
+    run = wandb.init(
+        # settings=wandb.Settings(start_method="fork"),
+        settings=wandb.Settings(start_method="thread"),
+        # Set the project where this run will be logged
+        project="roberta_discriminate",
+        # Track hyperparameters and run metadata
+        config={
+            "learning_rate": learning_rate,
+            "epochs": num_epochs,
+            "batch_size": train_batch_size,
+            "max_len": max_len,
+            "checkpoint": checkpoint
+
+        })
+#
+# ####################
+    tune(train_batch_size, learning_rate, num_epochs, checkpoint, max_len)
