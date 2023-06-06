@@ -187,8 +187,8 @@ def evaluate(model, data_loader, device):
     model.eval()
     y_true = []
     y_pred = []
-    opts_true =[]
-    opts_pred = []
+    # opts_true =[]
+    # opts_pred = []
     nc = 0
     ns = 0
 
@@ -207,10 +207,10 @@ def evaluate(model, data_loader, device):
             y_true.extend(labels.tolist())
             y_pred.extend(predicted_labels.tolist())
 
-            # ns += len(labels) / 5
-            # nc += (labels.argmax() == predicted_labels.argmax())
-            opts_true.append(labels.argmax())
-            opts_pred.append(predicted_labels.argmax())
+            ns += len(labels) / 5
+            nc += (labels.argmax() == predicted_labels.argmax())
+            # opts_true.append(labels.argmax())
+            # opts_pred.append(predicted_labels.argmax())
 
             # # Collect predictions and true labels for evaluation
             # predicted_labels = torch.sigmoid(logits) > 0.5
@@ -223,14 +223,14 @@ def evaluate(model, data_loader, device):
         # print('pred',y_pred)
         # print('ot',opts_true)
         # print(opts_pred)
-        correct_count = np.sum(np.array(opts_true)==np.array(opts_pred))
+        # correct_count = np.sum(np.array(opts_true)==np.array(opts_pred))
         accuracy = accuracy_score(y_true, y_pred)
         recall = recall_score(y_true, y_pred)
         f1= f1_score(y_true, y_pred)
-        correctness = correct_count /len(opts_true)
+        # correctness = correct_count /len(opts_true)
 
         # correctness = (opts_pred==opts_true) /len(opts_true)
-        # correctness = nc / ns
+        correctness = nc / ns
 
         return accuracy, recall, f1, correctness
 
@@ -316,6 +316,36 @@ def get_data_path(task_id):
         print('Wrong task id, task id should be 1, 2, 3')
         return
     return train_val_json_path, test_json_path
+
+def get_newdata_path(task_id):
+    if task_id == 0:
+        train_json_path = ("../data/training_data/train_test.jsonl")
+        val_json_path = ("../data/training_data/train_test.jsonl")
+        test_json_path = ("../data/training_data/train_test.jsonl")
+    elif task_id == 1:
+        train_json_path = ('../newdata/train/Task_1_train.jsonl')
+        val_json_path = ('../newdata/val/Task_1_val.jsonl')
+        test_json_path = ('../newdata/test/Task_1_test.jsonl')
+
+    elif task_id == 2:
+        train_json_path = ('../newdata/train/Task_2_train.jsonl')
+        val_json_path = ('../newdata/val/Task_2_val.jsonl')
+        test_json_path = ('../newdata/test/Task_2_test.jsonl')
+
+    elif task_id == 3:
+        train_json_path = ('../newdata/train/Task_1_train.jsonl')
+        val_json_path = ('../newdata/val/Task_2_val.jsonl')
+        test_json_path = ('../newdata/test/Task_1_test.jsonl')
+
+    elif task_id == 4:
+        train_json_path = ('../newdata/train/Task_2_train.jsonl')
+        val_json_path = ('../newdata/val/Task_1_val.jsonl')
+        test_json_path = ('../newdata/test/Task_2_test.jsonl')
+    else:
+        print('Wrong task id, task id should be 1, 2, 3, 4')
+        return
+    return train_json_path,val_json_path, test_json_path
+
 def kfold_tune(k=5,train_batch_size=50, learning_rate=1e-5, num_epochs=10, checkpoint="roberta-base", max_len=20,task_id=1):
     # ############### loading data
     # train_json_path = ("../data/training_data/train_test.jsonl")
@@ -363,29 +393,15 @@ def tune(train_batch_size=50, learning_rate=1e-5, num_epochs=10, checkpoint="rob
     tokenizer = RobertaTokenizer.from_pretrained(checkpoint)
     model = RobertaForSequenceClassification.from_pretrained(checkpoint)
 
-    train_val_json_path, test_json_path = get_data_path(task_id=task_id)
+    train_json_path, val_json_path, test_json_path = get_newdata_path(task_id)
 
-    train_val_dataset = MyDataset(train_val_json_path, tokenizer, max_len=max_len)
-    # test_loader = DataLoader(test_binary_dataset, batch_size=5, shuffle=False)
+    train_set = MyDataset(train_json_path, tokenizer, max_len=max_len)
+    val_set = MyDataset(val_json_path, tokenizer, max_len=max_len)
+    test_set = MyDataset(test_json_path, tokenizer, max_len=max_len)
 
-    test_dataset = MyDataset(test_json_path, tokenizer, max_len=max_len)
-    test_loader = DataLoader(test_dataset, batch_size=5, shuffle=False)
-    # print(len(test_binary_dataset))
-
-    validation_ratio = 0.25
-
-    dataset_size = len(train_val_dataset)
-    sentence_num = dataset_size/5
-
-    val_size = int(sentence_num*validation_ratio)*5
-    train_size = dataset_size-val_size
-
-    train_set = torch.utils.data.Subset(train_val_dataset, range(train_size))
-    val_set = torch.utils.data.Subset(train_val_dataset, range(train_size,dataset_size))
-
-
-    train_loader = DataLoader(train_set, batch_size=train_batch_size)
-    val_loader = DataLoader(val_set, batch_size=5)
+    train_loader = DataLoader(train_set, batch_size=train_batch_size, shuffle=False)
+    val_loader = DataLoader(val_set, batch_size=5, shuffle=False)
+    test_loader = DataLoader(test_set, batch_size=5, shuffle=False)
 
     optimizer = AdamW(model.parameters(), lr=learning_rate)
 
@@ -430,8 +446,8 @@ if __name__ == '__main__':
         # settings=wandb.Settings(start_method="fork"),
         settings=wandb.Settings(start_method="thread"),
         # Set the project where this run will be logged
-        project="roberta_discriminate+task"+str(task_id),
-        # project="test",
+        # project="roberta_discriminate+task"+str(task_id),
+        project="test",
         # Track hyperparameters and run metadata
         config={
             "learning_rate": learning_rate,

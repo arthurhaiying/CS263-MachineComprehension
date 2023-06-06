@@ -136,26 +136,27 @@ def get_newdata_path(task_id):
         test_json_path = ("../data/training_data/train_test.jsonl")
     elif task_id == 1:
         train_json_path = ('../newdata/train/Task_1_train.jsonl')
-        test_json_path = ('../newdata/val/Task_1_test.jsonl')
-        val_json_path = ('../newdata/test/Task_1_val.jsonl')
+        val_json_path = ('../newdata/val/Task_1_val.jsonl')
+        test_json_path = ('../newdata/test/Task_1_test.jsonl')
 
     elif task_id == 2:
         train_json_path = ('../newdata/train/Task_2_train.jsonl')
-        test_json_path = ('../newdata/val/Task_2_test.jsonl')
-        val_json_path = ('../newdata/test/Task_2_val.jsonl')
+        val_json_path = ('../newdata/val/Task_2_val.jsonl')
+        test_json_path = ('../newdata/test/Task_2_test.jsonl')
 
     elif task_id == 3:
         train_json_path = ('../newdata/train/Task_1_train.jsonl')
-        test_json_path = ('../newdata/val/Task_1_test.jsonl')
-        val_json_path = ('../newdata/test/Task_1_val.jsonl')
+        val_json_path = ('../newdata/val/Task_2_val.jsonl')
+        test_json_path = ('../newdata/test/Task_1_test.jsonl')
 
     elif task_id == 4:
-        train_val_json_path = ("../data/training_data/Task_2_train.jsonl")
-        test_json_path = ("../data/training_data/Task_1_dev.jsonl")
+        train_json_path = ('../newdata/train/Task_2_train.jsonl')
+        val_json_path = ('../newdata/val/Task_1_val.jsonl')
+        test_json_path = ('../newdata/test/Task_2_test.jsonl')
     else:
-        print('Wrong task id, task id should be 1, 2, 3')
+        print('Wrong task id, task id should be 1, 2, 3, 4')
         return
-    return train_val_json_path, test_json_path
+    return train_json_path,val_json_path, test_json_path
 
 def get_data_path(task_id):
     if task_id == 0:
@@ -361,28 +362,15 @@ def tune( train_batch_size=50, learning_rate=1e-5, num_epochs=10, checkpoint="ro
     tokenizer = RobertaTokenizer.from_pretrained(checkpoint)
     model = RobertaForMaskedLM.from_pretrained(checkpoint)
 
-    train_val_json_path, test_json_path = get_data_path(task_id)
+    train_json_path, val_json_path, test_json_path = get_newdata_path(task_id)
 
-    train_val_dataset = ClozeDataset(train_val_json_path, tokenizer, max_len=max_len)
+    train_set = ClozeDataset(train_json_path, tokenizer, max_len=max_len)
+    val_set = ClozeDataset(val_json_path, tokenizer, max_len=max_len)
+    test_set = ClozeDataset(test_json_path, tokenizer, max_len=max_len)
 
-    test_dataset = ClozeDataset(test_json_path, tokenizer, max_len=max_len)
-    test_loader = DataLoader(test_dataset, batch_size=5, shuffle=False)
-
-    # ------------k fold---------------------
-
-    validation_ratio = 0.25
-
-    dataset_size = len(train_val_dataset)
-
-    val_size = int(dataset_size * validation_ratio)
-    train_size = dataset_size - val_size
-
-    train_set = torch.utils.data.Subset(train_val_dataset, range(train_size))
-    val_set = torch.utils.data.Subset(train_val_dataset, range(train_size, dataset_size))
-
-    train_loader = DataLoader(train_set, batch_size=train_batch_size)
-    val_loader = DataLoader(val_set, batch_size=5)
-
+    train_loader = DataLoader(train_set, batch_size=train_batch_size, shuffle=False)
+    val_loader = DataLoader(val_set, batch_size=5, shuffle=False)
+    test_loader = DataLoader(test_set, batch_size=5, shuffle=False)
 
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
