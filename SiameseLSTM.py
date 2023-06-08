@@ -33,10 +33,11 @@ class Siamese_lstm(nn.Module):
         super(Siamese_lstm, self).__init__()
 
         self.encoder = LSTMEncoder(embed_size, hidden_size, num_layers, batch_size, vocab_size)
-        self.input_dim = 2 * self.encoder.hidden_size
+        self.input_dim = 5 * self.encoder.hidden_size
         self.classifier = nn.Sequential(
             nn.Linear(self.input_dim, self.input_dim//2),
-            nn.Linear(self.input_dim//2, 2)
+            nn.ReLU(),
+            nn.Linear(self.input_dim//2, 1)
         )
         
 
@@ -49,14 +50,13 @@ class Siamese_lstm(nn.Module):
         # input one by one
         o1 = self.encoder(X1, h1, c1)
         o2 = self.encoder(X2, h2, c2)
-        # print(f"o1: {o1.size()} o2: {o2.size()}")
-
+        # print(f"o1: {o1.size()} o2: {o2.size()}") 
         # utilize these two encoded vectors
-        features = torch.cat((o1, o2), -1)
-        # features = v1 | v2
+        features = torch.cat((o1, o2, torch.abs(o1-o2), o1*o2, (o1+o2)/2.0), -1)
+        # features = [v1, v2, |v1-v2|, v1*v2, (v1+v2)/2]
         output = self.classifier(features)
-        score = nn.functional.softmax(output)
-        score = score[:, 0]
+        score = nn.functional.sigmoid(output)
+        score = score.reshape((-1,))
         return score
     
 
