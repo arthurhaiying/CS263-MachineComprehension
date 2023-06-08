@@ -56,7 +56,7 @@ class Siamese_lstm(nn.Module):
         # features = [v1, v2, |v1-v2|, v1*v2, (v1+v2)/2]
         output = self.classifier(features)
         score = nn.functional.sigmoid(output)
-        score = score.reshape((-1,))
+        score = score.squeeze()
         return score
     
 
