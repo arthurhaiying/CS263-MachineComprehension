@@ -1,6 +1,7 @@
 from torchtext.data.utils import get_tokenizer
 from torchtext.vocab import build_vocab_from_iterator
 from torch.utils.data import Dataset, DataLoader
+from torch.nn.utils.rnn import pad_sequence
 import torch
 import jsonlines
 import torch.nn as nn
@@ -13,14 +14,14 @@ train_data_path = "data/training_data/Task_1_train.jsonl"
 test_data_path = "data/training_data/Task_1_dev.jsonl"
 UNK = "<UNK>" # unseen word in training set
 PLACE_HOLDER = '@placeholder'
-#PAD = "<PAD>"
+PAD = "<PAD>"
 SEP = "<SEP>"
 
 
 experiment_config = {
     'training':{
         'num_epochs': 10,
-        'batch_size': 1
+        'batch_size': 32
     },
         
     'model':{
@@ -57,14 +58,15 @@ def yield_tokens(data_iter, tokenizer):
         yield tokens
 
 yield_tokens_iter = yield_tokens(data_iter(train_data_path), tokenizer)
-vocab = build_vocab_from_iterator(yield_tokens_iter, specials=[UNK,PLACE_HOLDER,SEP])
-#PAD_ID = vocab[PAD]
+vocab = build_vocab_from_iterator(yield_tokens_iter, specials=[UNK,PAD,PLACE_HOLDER,SEP])
+PAD_ID = vocab[PAD]
 UNK_ID = vocab[UNK]
 PLACE_HOLDER_ID = vocab[PLACE_HOLDER] # id 1
 SEP_ID = vocab[SEP] # id 2
 vocab.set_default_index(UNK_ID)
 vocab_size = len(vocab)
 experiment_config["model"]["vocab_size"] = vocab_size
+experiment_config["model"]["pad"] = PAD_ID
 
 
 def word2id(word):
@@ -147,6 +149,24 @@ class MyDataset(Dataset):
             return X, Y, opts, label
         else:
             return instance
+        
+# convert a list of samples into batch and padding
+def collate(batch):
+    X_list, Y_list, opts_list, label_list = [], [], [], []
+    for X,Y,opts,label in batch:
+        X_list.append(X)
+        Y_list.append(Y)
+        opts_list.append(opts)
+        label_list.append(label)
+    
+    lengths = [len(X) for X in X_list]
+    X_pad = pad_sequence(X_list, batch_first=True, padding_value=PAD_ID) # pad input to maxlen
+    Y_ = torch.stack(Y_list)
+    opts_ = torch.stack(opts_list)
+    labels_ = torch.stack(label_list)
+    return X_pad, Y_, opts_, labels_, lengths
+
+
 
 
 # For now, batch size = 5
@@ -156,17 +176,14 @@ def evaluate(model, test_loader):
     nc = 0
     with torch.no_grad():
         print('eval')
-        for instance in test_loader:
-            batch = transform(instance)
-            X, Y, opts, label = batch
-            #batch_size = 1
-            output = model(X)
-            output = output[0] # (V,)
-            opts = opts[0] # (5,)
-            output = output[opts]
-            Y_pred = output.argmax()
-            ns += 1
-            nc += (Y_pred==label[0])
+        for batch in test_loader:
+            X, Y, opts, labels, lengths = batch
+            batch_size = len(X)
+            output = model(X, lengths) # (N, V)
+            Y_pred = torch.argmax(output, dim=1) # (N,)
+            labels = labels.squeeze()
+            ns += batch_size
+            nc += torch.sum(Y_pred==labels)
             #print(f"instance {ns}, predict {score.argmax()}, label {Y.argmax()}")
 
         print(f"nc: {nc}, ns: {ns}", flush=True)
@@ -176,26 +193,31 @@ def evaluate(model, test_loader):
 
 
 
+
+
+
 def main():
     train_dataset = MyDataset(train_data_path, transform=transform)
-    train_loader = DataLoader(train_dataset, 
-                              batch_size=experiment_config["training"]["batch_size"], 
-                              shuffle=True)
+    test_dataset = MyDataset(test_data_path, transform=transform)
     model = ClozeLSTM(config=experiment_config)
     optimizer = torch.optim.Adam(model.parameters())
     num_epochs = experiment_config["training"]["num_epochs"]
     for epoch in range(num_epochs):
         print(f"start epoch: {epoch}")
         # training
+        train_loader = DataLoader(train_dataset, 
+                                  batch_size=experiment_config["training"]["batch_size"], 
+                                  collate_fn=collate,
+                                  shuffle=True)
         model.train()
         cnt=0
         for instance in train_loader:
             cnt+=1
             if cnt%20==0:
                 print(cnt)
-            X, Y, opts, label = instance
+            X, Y, opts, label, lengths = instance
             optimizer.zero_grad()
-            output = model(X)
+            output = model(X, lengths)
             loss = nn.CrossEntropyLoss()
             l=loss(output, Y)
             # print(l)
@@ -203,8 +225,14 @@ def main():
             optimizer.step()
 
         # testing
-        train_loader = data_iter(train_data_path)
-        test_loader = data_iter(test_data_path)
+        train_loader = DataLoader(train_dataset, 
+                                  batch_size=experiment_config["training"]["batch_size"], 
+                                  collate_fn=collate,
+                                  shuffle=True)
+        test_loader = DataLoader(test_dataset, 
+                                 batch_size=experiment_config["training"]["batch_size"], 
+                                 collate_fn=collate,
+                                 shuffle=True)
         train_acc = evaluate(model, train_loader)
         test_acc = evaluate(model, test_loader)
         print(f"=== epoch: {epoch}, train acc: {train_acc}, test acc: {test_acc}\n")
@@ -227,14 +255,16 @@ if __name__ == '__main__':
     # model = ClozeLSTM(config=experiment_config) 
     # output = model(X)
     # print(f"output: {output.size()}", output)
-    # train_dataset = MyDataset(train_data_path, transform=transform)
-    # train_dataloader = DataLoader(train_dataset, 
-    #                               batch_size=experiment_config["training"]["batch_size"], 
-    #                               shuffle=True)
-    # X, Y, opts, label = next(iter(train_dataloader))
-    # print(f"X: {X.size()}", X)
-    # print(f"Y: {Y.size()}", Y)
-    # print(f"opts: ", opts)
-    # print(f"label: ", label )
+    train_dataset = MyDataset(train_data_path, transform=transform)
+    train_dataloader = DataLoader(train_dataset, 
+                                  batch_size=experiment_config["training"]["batch_size"],
+                                  collate_fn=collate, 
+                                  shuffle=True)
+    X, Y, opts, label, lengths = next(iter(train_dataloader))
+    print(f"X: {X.size()}", X)
+    print(f"Y: {Y.size()}", Y)
+    print(f"opts {opts.size()}: ", opts)
+    print(f"label: {label.size()}", label )
+    print("lengths: ", lengths)
     main()
     

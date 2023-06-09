@@ -1,5 +1,6 @@
 from torch import nn
 import torch.nn.functional as Fun
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import torch
 
 
@@ -12,9 +13,10 @@ class ClozeLSTM(nn.Module):
         self.hidden_size = config['model']['hidden_size']
         self.num_layers = config['model']['num_layers']
         self.dropout = config['model']['dropout']
+        self.pad_idx = config['model']['pad']
 
-        self.embedding = nn.Embedding(self.vocab_size, self.embed_size)
-        self.lstm = nn.LSTM(input_size=self.embed_size, hidden_size=self.hidden_size, 
+        self.embedding = nn.Embedding(self.vocab_size, self.embed_size, padding_idx=self.pad_idx)
+        self.lstm = nn.LSTM(input_size=self.embed_size, hidden_size=self.hidden_size,
                             dropout=self.dropout, num_layers=self.num_layers)
         self.latent_size = 2*self.num_layers*self.hidden_size
         self.output_size = self.vocab_size
@@ -25,11 +27,13 @@ class ClozeLSTM(nn.Module):
             nn.Linear(middle_size, self.output_size)
         )
         
-    def forward(self, X):
+    def forward(self, X, lengths):
         # input: (N, L)
         X = self.embedding(X) # shape (N, L, E)
         X = X.swapaxes(0, 1) # shape (L, N, E)
+        X_packed = pack_padded_sequence(X, lengths, enforce_sorted=False)
         O, (H, C) = self.lstm(X) # H, C: (num_layers, N, H)
+        #O_pad = pad_packed_sequence(O, padding_value=self.pad_idx)
         H = H.swapaxes(0, 1) # H: (N, num_layers, H)
         C = C.swapaxes(0, 1) # H: (N, num_layers, H)
         H = H.flatten(start_dim=1)
