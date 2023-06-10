@@ -21,7 +21,8 @@ SEP = "<SEP>"
 experiment_config = {
     'training':{
         'num_epochs': 10,
-        'batch_size': 32
+        'batch_size': 32,
+        'max_seq_len':512
     },
         
     'model':{
@@ -88,6 +89,9 @@ def substitute(query, opt):
 def transform(instance):
     article, question, opts, label = instance
     qa = sent2ids(question)+[SEP_ID]+sent2ids(article)
+    max_seq_len = experiment_config["training"]["max_seq_len"]
+    if len(qa) > max_seq_len:
+        qa = qa[:max_seq_len]
     X = torch.tensor(qa,dtype=torch.int64)
     # assume each opt is single word
     opt = opts[label]
@@ -180,6 +184,7 @@ def evaluate(model, test_loader):
             X, Y, opts, labels, lengths = batch
             batch_size = len(X)
             output = model(X, lengths) # (N, V)
+            output = torch.take_along_dim(output, indices=opts, dim=1)
             Y_pred = torch.argmax(output, dim=1) # (N,)
             labels = labels.squeeze()
             ns += batch_size
@@ -213,7 +218,7 @@ def main():
         cnt=0
         for instance in train_loader:
             cnt+=1
-            if cnt%20==0:
+            if cnt%10==0:
                 print(cnt)
             X, Y, opts, label, lengths = instance
             optimizer.zero_grad()
