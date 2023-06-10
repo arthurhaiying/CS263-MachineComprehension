@@ -20,7 +20,8 @@ class ClozeLSTM(nn.Module):
                             dropout=self.dropout, num_layers=self.num_layers)
         self.latent_size = 2*self.num_layers*self.hidden_size
         self.output_size = self.vocab_size
-        middle_size = (self.latent_size+self.output_size)//2
+        #middle_size = (self.latent_size+self.output_size)//2
+        middle_size = 2* self.latent_size
         self.mlp = nn.Sequential(
             nn.Linear(self.latent_size, middle_size),
             nn.ReLU(),
